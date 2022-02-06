@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <time.h>
 
 #define ANSI_COLOUR_RED     "\x1b[31m"
 #define ANSI_COLOUR_GREEN   "\x1b[32m"
@@ -17,10 +18,80 @@ void set(uint8_t [ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE], uint8_t);
 void print(uint8_t [ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE]);
 uint32_t haswon(uint8_t [ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE], uint8_t, uint8_t);
 uint32_t findfourth(uint8_t [ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE], uint8_t, uint8_t*, uint8_t*, uint8_t*, uint8_t*);
+uint8_t aiplay(uint8_t [ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE], uint8_t, uint8_t, uint8_t*, uint16_t);
+void linecount(uint8_t [ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE], uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t*, uint8_t*);
+int rungameauto(int aiplayers, int points, int endpoints, int endamount, uint8_t [ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE]);
+uint8_t contains(uint8_t [ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE], uint8_t);
+void runautogames();
 
 int main (int argc, char* argv[]){
 	rungame();
+	//runautogames();
 }
+
+void runautogames(){
+	srand((unsigned) time(NULL)); // Begin random number generator for AI
+	int wins[3] = {0, 0, 0};
+	for(int i=0; i<1000; i++){
+		uint8_t state[ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE];
+		set(state, 0);
+		int winner = rungameauto(2, 0, 0, 0, state);
+		wins[winner] += 1;
+		//if(winner > 0)
+		//	printf("AI %u won!\n", winner);
+		//else
+		//	printf("Draw\n");
+		//print(state);
+	}
+	printf("%u draws\n", wins[0]);
+	for(int i=1; i<3; i++){
+		printf("AI %u won %u times\n", i, wins[i]);
+	}
+}
+
+int rungameauto(int aiplayers, int points, int endpoints, int endamount, uint8_t state[ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE]){
+	// players - total
+	// aiplayers - how many of these are ai
+	// points - whether to use points
+	// endpoints - how many points to end at (ignored if points is 0)
+
+	int players = aiplayers;
+
+	int player = 1;
+	uint8_t run = 1;
+	char input[10];
+
+	while(run){//input!=exit
+		//printf("Player %u is computer controlled\n", player);
+		uint8_t played[4];
+		uint16_t r = rand();
+		uint8_t didplay = aiplay(state, player, players, played, r);
+		if(didplay)
+			//printf("Computer playing at %u, %u, %u, %u\n", played[2]+1, played[0]+1, played[3]+1, played[1]+1);
+			if(points==0){
+				if(haswon(state, player, 0)!=0){
+					//printf("PLAYER %u HAS WON!!!\n", player);
+					//print(state);
+					//haswon(state, player, 1);
+					return player;
+				}
+			}else{
+				//printf("Player %u has %u points\n", player, haswon(state, player, 0));
+				if(endpoints && haswon(state, player, 0)==endamount)
+					//printf("Player %u has won the game!\n", player);
+					return player;
+			}
+		//print(state);
+		if(player>=players)
+			player=1;
+		else
+			player++;
+		run = contains(state, 0);
+	}
+	//print(state);
+	return 0;
+}
+
 
 void rungame(){
 	uint8_t state[ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE];
@@ -80,6 +151,8 @@ void rungame(){
 	uint8_t run = 1;
 	char input[10];
 
+	srand((unsigned) time(NULL)); // Begin random number generator for AI
+
 	print(state);
 
 	while(run){//input!=exit
@@ -97,16 +170,23 @@ void rungame(){
 		}
 		if(player > players-aiplayers){
 			printf("Player %u is computer controlled\n", player);
-			for(int play = 1; play <= players; play++){
-				if(play != player){
-					uint8_t Ycoord, ycoord, Xcoord, xcoord;
-					uint8_t fourthfound = findfourth(state, play, &Ycoord, &ycoord, &Xcoord, &xcoord);
-					if(fourthfound == 1){
-						printf("Computer playing at %u, %u, %u, %u\n", Xcoord+1, Ycoord+1, xcoord+1, ycoord+1);
-						state[Ycoord][ycoord][Xcoord][xcoord] = player;
+			uint8_t played[4];
+			uint16_t r = rand();
+			uint8_t didplay = aiplay(state, player, players, played, r);
+			if(didplay)
+				printf("Computer playing at %u, %u, %u, %u\n", played[2]+1, played[0]+1, played[3]+1, played[1]+1);
+				if(points==0){
+					if(haswon(state, player, 0)!=0){
+						printf("PLAYER %u HAS WON!!!\n", player);
+						print(state);
+						haswon(state, player, 1);
+						exit(0);
 					}
+				}else{
+					printf("Player %u has %u points\n", player, haswon(state, player, 0));
+					if(endpoints && haswon(state, player, 0)==endamount)
+						printf("Player %u has won the game!\n", player);
 				}
-			}
 			print(state);
 			if(player>=players)
 				player=1;
@@ -182,6 +262,160 @@ void rungame(){
 		}else{
 			printf("Error, invalid command\n");
 		}
+		if(contains(state, 0) == 0){
+			printf("No more moves possible\n");
+			run = 0;
+		}
+	}
+}
+
+uint8_t aiplay(uint8_t state[ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE], uint8_t player, uint8_t players, uint8_t* played, uint16_t r){
+	// if can win, play
+	// if other about to win, block
+	// if a point has 2 in 2 different directions, play  (set score to 100
+	// if another player has 2 in 2 different directions, play  (set score to 80
+	// for each point; for each direction clear; add 2 score for 1 of own, and 6 for 2 of own, subtract 1 for any of other (max 16 directions, 1 with 2 and 15 with 1, max score is 17
+	// play at highest score
+	// if all scores 0, play at random location with least other player pieces per direction
+	uint8_t Ycoord, ycoord, Xcoord, xcoord;
+	uint8_t fourthfound = findfourth(state, player, &Ycoord, &ycoord, &Xcoord, &xcoord);
+	if(fourthfound == 1){
+		state[Ycoord][ycoord][Xcoord][xcoord] = player;
+		played[0] = Ycoord;
+		played[1] = ycoord;
+		played[2] = Xcoord;
+		played[3] = xcoord;
+		return 1;
+	}
+	for(int play = 1; play <= players; play++){
+		if(play != player){
+			uint8_t fourthfound = findfourth(state, play, &Ycoord, &ycoord, &Xcoord, &xcoord);
+			if(fourthfound == 1){
+				state[Ycoord][ycoord][Xcoord][xcoord] = player;
+				played[0] = Ycoord;
+				played[1] = ycoord;
+				played[2] = Xcoord;
+				played[3] = xcoord;
+				return 1;
+			}
+		}
+	}
+	// uint8_t self1[ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE];
+	// uint8_t self2[ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE];
+	// uint8_t other1[ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE];
+	// uint8_t other2[ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE];
+	// set(self1, 0);
+	// set(self2, 0);
+	// set(other1, 0);
+	// set(other2, 0);
+	uint8_t score[ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE];
+	uint8_t baselevel = 20;
+	set(score, baselevel);
+	uint8_t maxscore = baselevel;
+	uint32_t nummaxscore = 0;
+	for(uint8_t i=0;i<ARRAYSIZE;i++){																					// Iterate through all positions
+		for(uint8_t j=0;j<ARRAYSIZE;j++){
+			for(uint8_t k=0;k<ARRAYSIZE;k++){
+				for(uint8_t l=0;l<ARRAYSIZE;l++){
+					if(state[i][j][k][l]==0){																			// If position clear 
+						uint8_t self1 = 0;
+						uint8_t self2 = 0;
+						uint8_t other1 = 0;
+						uint8_t other2 = 0;
+						for(uint8_t t=1; t<16; t++){																	// Iterate through all directions
+							uint8_t self = 0;
+							uint8_t other = 0;
+							linecount(state, player, i, j, k, l, t, &self, &other);
+							if(self == 1 && other == 0)
+								self1 += 1;
+							if(self == 2 && other == 0)
+								self2 += 1;
+							if(self == 0 && other == 1)
+								other1 += 1;
+							if(self == 0 && other == 2)
+								other2 += 1;
+						}
+						if(self2 >= 2)
+							score[i][j][k][l] = 100;
+						else if(other2 >= 2)
+							score[i][j][k][l] = 80;
+						else {
+							score[i][j][k][l] = baselevel + 6 * self2 + 2 * self1 - (other1 + other2);
+							if(score[i][j][k][l] > 150)
+								score[i][j][k][l] = 0;
+						}
+						if(score[i][j][k][l] > maxscore){
+							maxscore = score[i][j][k][l];
+							nummaxscore = 1;
+						} else if(score[i][j][k][l] == maxscore)
+							nummaxscore ++;
+					} else {
+						score[i][j][k][l] = 0;
+					}
+				}
+			}
+		}
+	}
+	//printf("maxscore = %u", maxscore);
+	//print(score);
+	uint32_t nummaxscorecount = 0;
+	for(uint8_t i=0;i<ARRAYSIZE;i++){																					// Iterate through all positions
+		for(uint8_t j=0;j<ARRAYSIZE;j++){
+			for(uint8_t k=0;k<ARRAYSIZE;k++){
+				for(uint8_t l=0;l<ARRAYSIZE;l++){
+					if(score[i][j][k][l] == maxscore){
+						if(nummaxscorecount == (r%nummaxscore)){
+							state[i][j][k][l] = player;
+							played[0] = i;
+							played[1] = j;
+							played[2] = k;
+							played[3] = l;
+							return 1;
+						} else
+							nummaxscorecount ++;
+					}
+				}
+			}
+		}
+	}
+	printf("Error! AI failed\n");
+	print(state);
+
+
+	return 0;
+}
+
+void linecount(uint8_t state[ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE], uint8_t player, uint8_t Ycoord, uint8_t ycoord, uint8_t Xcoord, uint8_t xcoord, uint8_t direction, uint8_t* self, uint8_t* other){
+	// Accept coordinates, player and direction, find number of player and other player pieces
+	uint8_t I=Ycoord; uint8_t J=ycoord; uint8_t K=Xcoord; uint8_t L=xcoord;
+	while(I < ARRAYSIZE && J < ARRAYSIZE && K < ARRAYSIZE && L < ARRAYSIZE){
+		if(state[I][J][K][L]==player){
+			*self += 1;
+		}
+		if(state[I][J][K][L]!=player && state[I][J][K][L]!=0){
+			*other += 1;
+		}
+		I+=(direction & 0x01);
+		J+=(direction & 0x02)>>1;
+		K+=(direction & 0x04)>>2;
+		L+=(direction & 0x08)>>3;
+	}
+	I=Ycoord; J=ycoord; K=Xcoord; L=xcoord;
+	I-=(direction & 0x01);
+	J-=(direction & 0x02)>>1;
+	K-=(direction & 0x04)>>2;
+	L-=(direction & 0x08)>>3;
+	while(I < 255 && J < 255 && K < 255 & L < 255){  // Can't just do >=0, as it is unsigned, so 0-1 wraps around to 255
+		if(state[I][J][K][L]==player){
+			*self += 1;
+		}
+		if(state[I][J][K][L]!=player && state[I][J][K][L]!=0){
+			*other += 1;
+		}
+		I-=(direction & 0x01);
+		J-=(direction & 0x02)>>1;
+		K-=(direction & 0x04)>>2;
+		L-=(direction & 0x08)>>3;
 	}
 }
 
@@ -228,6 +462,19 @@ uint32_t haswon(uint8_t state[ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE], uint8
 	return points;
 }
 
+uint8_t contains(uint8_t state[ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE], uint8_t search){
+	for(uint8_t i=0;i<ARRAYSIZE;i++){																					// Iterate through all positions
+		for(uint8_t j=0;j<ARRAYSIZE;j++){
+			for(uint8_t k=0;k<ARRAYSIZE;k++){
+				for(uint8_t l=0;l<ARRAYSIZE;l++){
+					if(state[i][j][k][l] == search)
+						return 1;
+				}
+			}
+		}
+	}
+	return 0;
+}
 
 uint32_t findfourth(uint8_t state[ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE], uint8_t player, uint8_t* icoord, uint8_t* jcoord, uint8_t* kcoord, uint8_t* lcoord){
 	uint8_t returnvalue = 0;
@@ -236,7 +483,7 @@ uint32_t findfourth(uint8_t state[ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE], u
 			for(uint8_t k=0;k<ARRAYSIZE;k++){
 				for(uint8_t l=0;l<ARRAYSIZE;l++){
 					if(state[i][j][k][l]==player){																		// If player played in location
-						for(uint8_t t=1; t<16; t++){																	// Iterate through all directions	
+						for(uint8_t t=1; t<16; t++){																	// Iterate through all directions
 							uint8_t I=i;uint8_t J=j;uint8_t K=k;uint8_t L=l;
 							int line = 0;
 							//for(int s=1;s<ARRAYSIZE;s++){															// Check if all states along vector are the same
@@ -261,7 +508,7 @@ uint32_t findfourth(uint8_t state[ARRAYSIZE][ARRAYSIZE][ARRAYSIZE][ARRAYSIZE], u
 									return returnvalue;
 								}
 								uint8_t I=i;uint8_t J=j;uint8_t K=k;uint8_t L=l;
-								while(I < 255 && J < 255 && K < 255 && L < 255){  // Can't just do >=0, as it is unsignes, so 0-1 wraps around to 255
+								while(I < 255 && J < 255 && K < 255 && L < 255){  // Can't just do >=0, as it is unsigned, so 0-1 wraps around to 255
 									if(state[I][J][K][L] != player){
 										*icoord = I; *jcoord = J; *kcoord = K; *lcoord = L;
 										if(state[I][J][K][L] == 0)
