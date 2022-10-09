@@ -9,4 +9,4 @@ Possible features to add:
  - Computer player?
     - block player when they had 2/3 in a row
     - add to row that has own piece and isn't blocked if possible
-    - play in position with as little enemy pieces around it as possible
+    - ~~play in position with as little enemy pieces around it as possible~~
